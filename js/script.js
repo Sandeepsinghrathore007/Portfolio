@@ -217,9 +217,137 @@
 
 /* ── 5. Contact Form (simple client-side) ────────────────── */
 (function initContactForm() {
-  const form    = document.getElementById('contactForm');
-  const success = document.getElementById('formSuccess');
+  const WHATSAPP_NUMBER = '919116723294';
+  const EMAIL_ADDRESS   = 'sandeepsinghrahorerajpoot@gmail.com';
+  const isMobileDevice  = /Android|iPhone|iPad|iPod|Mobile|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
+  const form          = document.getElementById('contactForm');
+  const success       = document.getElementById('formSuccess');
+  const feedback      = document.getElementById('formFeedback');
+  const successIcon   = document.getElementById('formSuccessIcon');
+  const successTitle  = document.getElementById('formSuccessTitle');
+  const successText   = document.getElementById('formSuccessText');
+  const successAction = document.getElementById('formSuccessAction');
+  const editButton    = document.getElementById('formEditButton');
   if (!form) return;
+
+  const nameInput    = form.querySelector('#name');
+  const contactInput = form.querySelector('#contact');
+  const serviceInput = form.querySelector('#service');
+  const messageInput = form.querySelector('#message');
+
+  function resetSubmitState() {
+    const btn  = form.querySelector('button[type="submit"]');
+    const span = btn.querySelector('span');
+
+    btn.disabled = false;
+    span.textContent = 'Send Message';
+  }
+
+  function setFeedback(message = '', type = '') {
+    if (!feedback) return;
+
+    feedback.textContent = message;
+    feedback.classList.remove('is-error', 'is-success');
+    if (type) feedback.classList.add(type);
+  }
+
+  function isValidEmail(value) {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(value);
+  }
+
+  function isValidPhone(value) {
+    const digits = value.replace(/\D/g, '');
+    return digits.length >= 10 && digits.length <= 15;
+  }
+
+  function getServiceLabel() {
+    if (!serviceInput.value) return 'Not specified';
+    return serviceInput.options[serviceInput.selectedIndex]?.textContent || 'Not specified';
+  }
+
+  function buildIntro(name) {
+    return `Hi Sandeep Rathore! I found you through your portfolio.${name ? `\n\nName: ${name}` : ''}`;
+  }
+
+  function buildWhatsAppUrl(message = '') {
+    const text = message ? encodeURIComponent(message) : '';
+
+    if (isMobileDevice) {
+      return `https://wa.me/${WHATSAPP_NUMBER}${text ? `?text=${text}` : ''}`;
+    }
+
+    return `https://web.whatsapp.com/send/?phone=${WHATSAPP_NUMBER}${text ? `&text=${text}` : ''}`;
+  }
+
+  function buildGmailUrl({ to = EMAIL_ADDRESS, subject = '', body = '' } = {}) {
+    const params = new URLSearchParams({
+      view: 'cm',
+      fs: '1',
+      tf: '1',
+      to
+    });
+
+    if (subject) params.set('su', subject);
+    if (body) params.set('body', body);
+
+    return `https://mail.google.com/mail/?${params.toString()}`;
+  }
+
+  function updateStaticWhatsAppLinks() {
+    document.querySelectorAll('[data-whatsapp-link]').forEach((link) => {
+      const message = link.getAttribute('data-whatsapp-message') || '';
+      link.href = buildWhatsAppUrl(message);
+      link.setAttribute('target', '_blank');
+      link.setAttribute('rel', 'noopener');
+    });
+  }
+
+  function showHandoffState(config) {
+    form.style.display = 'none';
+    success.classList.add('active');
+
+    successIcon.textContent = config.icon;
+    successTitle.textContent = config.title;
+    successText.textContent = config.text;
+    successAction.textContent = config.actionLabel;
+    successAction.href = config.actionHref;
+
+    if (config.actionHref.startsWith('http')) {
+      successAction.setAttribute('target', '_blank');
+      successAction.setAttribute('rel', 'noopener');
+    } else {
+      successAction.removeAttribute('target');
+      successAction.removeAttribute('rel');
+    }
+  }
+
+  function handoffTo(url) {
+    if (url.startsWith('http')) {
+      const openedWindow = window.open(url, '_blank', 'noopener');
+      if (!openedWindow) {
+        window.location.href = url;
+      }
+      return;
+    }
+
+    window.location.href = url;
+  }
+
+  updateStaticWhatsAppLinks();
+
+  contactInput.addEventListener('input', () => {
+    contactInput.setCustomValidity('');
+    setFeedback();
+  });
+
+  editButton?.addEventListener('click', () => {
+    success.classList.remove('active');
+    form.style.display = '';
+    resetSubmitState();
+    setFeedback();
+    contactInput.focus();
+  });
 
   form.addEventListener('submit', function (e) {
     e.preventDefault();
@@ -232,29 +360,72 @@
     span.textContent = 'Sending...';
 
     // Collect form data
-    const name    = form.querySelector('#name').value.trim();
-    const email   = form.querySelector('#email').value.trim();
-    const service = form.querySelector('#service').value;
-    const message = form.querySelector('#message').value.trim();
+    const name        = nameInput.value.trim();
+    const contact     = contactInput.value.trim();
+    const serviceText = getServiceLabel();
+    const message     = messageInput.value.trim();
 
-    // Build WhatsApp message (fallback delivery method)
-    const waText = encodeURIComponent(
-      `Hi Sandeep Rathore! I found you through your portfolio.\n\n` +
-      `Name: ${name}\nContact: ${email}\nService: ${service || 'Not specified'}\n\nMessage: ${message}`
-    );
+    const isEmail = isValidEmail(contact);
+    const isPhone = !isEmail && isValidPhone(contact);
 
-    // Simulate a brief processing time, then redirect to WhatsApp
-    setTimeout(() => {
-      form.classList.add('hidden');
-      form.style.display = 'none';
-      success.classList.add('active');
+    if (!isEmail && !isPhone) {
+      const errorMessage = 'Enter a valid email address or WhatsApp number.';
+      contactInput.setCustomValidity(errorMessage);
+      contactInput.reportValidity();
+      setFeedback(errorMessage, 'is-error');
+      resetSubmitState();
+      return;
+    }
 
-      // Update WhatsApp link with prefilled message
-      const waLink = success.querySelector('a[href*="wa.me"]');
-      if (waLink) {
-        waLink.href = `https://wa.me/9116723294?text=${waText}`;
-      }
-    }, 900);
+    const details = [
+      buildIntro(name),
+      `Contact: ${contact}`,
+      `Service: ${serviceText}`,
+      '',
+      `Message: ${message || 'Not provided'}`
+    ].join('\n');
+
+    if (isPhone) {
+      const waUrl = buildWhatsAppUrl(details);
+
+      showHandoffState({
+        icon: '💬',
+        title: isMobileDevice ? 'Opening WhatsApp...' : 'Opening WhatsApp Web...',
+        text: isMobileDevice
+          ? 'Your project details are ready. If WhatsApp does not open automatically, continue manually below.'
+          : 'A WhatsApp Web tab is opening with your project details. If it does not open, continue manually below.',
+        actionLabel: isMobileDevice ? 'Continue to WhatsApp →' : 'Continue to WhatsApp Web →',
+        actionHref: waUrl
+      });
+      handoffTo(waUrl);
+
+      return;
+    }
+
+    const gmailUrl = buildGmailUrl({
+      subject: `New project enquiry from ${name || 'Portfolio visitor'}`,
+      body: [
+        'Hi Sandeep Rathore,',
+        '',
+        'I found you through your portfolio and want to discuss a project.',
+        '',
+        `Name: ${name || 'Not provided'}`,
+        `Contact: ${contact}`,
+        `Service: ${serviceText}`,
+        '',
+        'Project details:',
+        message || 'Not provided'
+      ].join('\n')
+    });
+
+    showHandoffState({
+      icon: '📧',
+      title: 'Opening Gmail...',
+      text: 'A Gmail compose tab is opening with your project details. If it does not open, use the button below.',
+      actionLabel: 'Open Gmail Draft →',
+      actionHref: gmailUrl
+    });
+    handoffTo(gmailUrl);
   });
 })();
 
